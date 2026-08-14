@@ -4,4 +4,9 @@
     <RootNamespace>JobApplicationTracker.Api</RootNamespace>
     <AssemblyName>JobApplicationTracker.Api</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
 </Project>
