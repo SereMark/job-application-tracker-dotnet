@@ -16,7 +16,7 @@ public sealed class IntegrationInfrastructureTests(SqlServerContainerFixture sql
         await using JobApplicationTrackerApiFactory factory =
             await JobApplicationTrackerApiFactory.CreateAsync(
                 sqlServer.ConnectionString,
-                cancellationToken);
+                cancellationToken: cancellationToken);
         using HttpClient client = factory.CreateClient();
 
         using HttpResponseMessage response =
@@ -41,11 +41,11 @@ public sealed class IntegrationInfrastructureTests(SqlServerContainerFixture sql
         await using JobApplicationTrackerApiFactory firstFactory =
             await JobApplicationTrackerApiFactory.CreateAsync(
                 sqlServer.ConnectionString,
-                cancellationToken);
+                cancellationToken: cancellationToken);
         await using JobApplicationTrackerApiFactory secondFactory =
             await JobApplicationTrackerApiFactory.CreateAsync(
                 sqlServer.ConnectionString,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
         await using (AsyncServiceScope firstScope = firstFactory.Services.CreateAsyncScope())
         {

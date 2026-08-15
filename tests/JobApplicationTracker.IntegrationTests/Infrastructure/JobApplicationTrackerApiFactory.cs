@@ -2,18 +2,24 @@ using System.Data.Common;
 using JobApplicationTracker.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace JobApplicationTracker.IntegrationTests.Infrastructure;
 
 public sealed class JobApplicationTrackerApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _connectionString;
+    private readonly TimeProvider? _timeProvider;
 
-    private JobApplicationTrackerApiFactory(string serverConnectionString)
+    private JobApplicationTrackerApiFactory(
+        string serverConnectionString,
+        TimeProvider? timeProvider)
     {
+        _timeProvider = timeProvider;
         DatabaseName = $"JobApplicationTrackerTests_{Guid.NewGuid():N}";
 
         var connectionStringBuilder = new DbConnectionStringBuilder
@@ -31,9 +37,10 @@ public sealed class JobApplicationTrackerApiFactory : WebApplicationFactory<Prog
 
     public static async Task<JobApplicationTrackerApiFactory> CreateAsync(
         string serverConnectionString,
+        TimeProvider? timeProvider = null,
         CancellationToken cancellationToken = default)
     {
-        var factory = new JobApplicationTrackerApiFactory(serverConnectionString);
+        var factory = new JobApplicationTrackerApiFactory(serverConnectionString, timeProvider);
 
         try
         {
@@ -64,5 +71,14 @@ public sealed class JobApplicationTrackerApiFactory : WebApplicationFactory<Prog
 
             configuration.AddInMemoryCollection(testSettings);
         });
+
+        if (_timeProvider is not null)
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton(_timeProvider);
+            });
+        }
     }
 }

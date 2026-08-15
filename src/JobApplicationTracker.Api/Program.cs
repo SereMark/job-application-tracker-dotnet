@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using JobApplicationTracker.Api.Features.Applications;
+using JobApplicationTracker.Api.Features.Applications.Domain;
 using JobApplicationTracker.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +12,13 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddValidation();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter<ApplicationStatus>(
+            namingPolicy: null,
+            allowIntegerValues: false));
+});
 builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
     IConfiguration configuration = serviceProvider.GetRequiredService<IConfiguration>();
@@ -33,6 +43,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.MapJobApplicationEndpoints();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

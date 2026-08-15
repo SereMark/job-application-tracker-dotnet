@@ -1,0 +1,35 @@
+using JobApplicationTracker.Api.Features.Applications.Contracts;
+using JobApplicationTracker.Api.Features.Applications.Domain;
+
+namespace JobApplicationTracker.Api.Features.Applications;
+
+internal static class JobApplicationMappings
+{
+    public static JobApplicationDetails ToDetails(this CreateJobApplicationRequest request) =>
+        new(
+            request.CompanyName,
+            request.PositionTitle,
+            request.JobPostingUrl,
+            request.Source,
+            request.Location,
+            request.AppliedOn,
+            request.Notes,
+            request.NextActionDescription,
+            request.NextActionDueAt);
+
+    public static JobApplicationResponse ToResponse(this JobApplication application) =>
+        new(
+            application.Id,
+            application.CompanyName,
+            application.PositionTitle,
+            application.JobPostingUrl,
+            application.Source,
+            application.Location,
+            application.Status,
+            application.AppliedOn,
+            application.Notes,
+            application.NextActionDescription,
+            application.NextActionDueAt,
+            application.CreatedAt,
+            application.UpdatedAt);
+}
