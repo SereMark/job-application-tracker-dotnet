@@ -11,6 +11,7 @@ namespace JobApplicationTracker.Api.Features.Applications;
 
 internal static partial class JobApplicationEndpoints
 {
+    private const int SummaryWindowDays = 7;
     private const string GetByIdRouteName = "GetJobApplicationById";
     private const string LoggerCategory =
         "JobApplicationTracker.Api.Features.Applications.JobApplicationEndpoints";
@@ -39,6 +40,13 @@ internal static partial class JobApplicationEndpoints
                 + "be sorted by updatedAt, createdAt, companyName, positionTitle, appliedOn, "
                 + "or nextActionDueAt in asc or desc direction.")
             .ProducesValidationProblem();
+
+        group.MapGet("/summary", GetSummaryAsync)
+            .WithName("GetApplicationSummary")
+            .WithSummary("Summarize the application pipeline")
+            .WithDescription(
+                "Returns total and per-status application counts, plus overdue next actions "
+                + "and next actions due within the next seven days.");
 
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName(GetByIdRouteName)
@@ -232,6 +240,48 @@ internal static partial class JobApplicationEndpoints
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return TypedResults.NoContent();
+    }
+
+    private static async Task<Ok<ApplicationSummaryResponse>> GetSummaryAsync(
+        ApplicationDbContext dbContext,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        DateTimeOffset summaryWindowEnd = now.AddDays(SummaryWindowDays);
+
+        var summaryRows = await dbContext.JobApplications
+            .AsNoTracking()
+            .GroupBy(application => application.Status)
+            .Select(group => new
+            {
+                Status = group.Key,
+                TotalCount = group.Count(),
+                OverdueNextActionCount = group.Count(application =>
+                    application.NextActionDueAt < now),
+                NextActionDueWithinSevenDaysCount = group.Count(application =>
+                    application.NextActionDueAt >= now
+                    && application.NextActionDueAt <= summaryWindowEnd),
+            })
+            .ToListAsync(cancellationToken);
+
+        Dictionary<ApplicationStatus, int> countsByStatus = summaryRows.ToDictionary(
+            row => row.Status,
+            row => row.TotalCount);
+
+        List<ApplicationStatusCountResponse> statusCounts = Enum
+            .GetValues<ApplicationStatus>()
+            .Select(status => new ApplicationStatusCountResponse(
+                status,
+                countsByStatus.GetValueOrDefault(status)))
+            .ToList();
+
+        return TypedResults.Ok(new ApplicationSummaryResponse(
+            TotalCount: summaryRows.Sum(row => row.TotalCount),
+            StatusCounts: statusCounts,
+            OverdueNextActionCount: summaryRows.Sum(row => row.OverdueNextActionCount),
+            NextActionDueWithinSevenDaysCount: summaryRows.Sum(
+                row => row.NextActionDueWithinSevenDaysCount)));
     }
 
     private static async Task<Ok<PagedJobApplicationsResponse>> GetAllAsync(
