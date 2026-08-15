@@ -17,6 +17,17 @@ Copy-Item .env.example .env
 docker compose up -d --wait sqlserver
 ```
 
+Store the API connection string with the same password outside the repository:
+
+```powershell
+dotnet user-secrets set --project src/JobApplicationTracker.Api `
+  "ConnectionStrings:Database" `
+  "Server=127.0.0.1,1433;Database=JobApplicationTracker;User ID=sa;Password=<same-password>;Encrypt=True;TrustServerCertificate=True"
+dotnet tool restore
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet ef database update --project src/JobApplicationTracker.Api
+```
+
 Stop the container without deleting its data:
 
 ```powershell

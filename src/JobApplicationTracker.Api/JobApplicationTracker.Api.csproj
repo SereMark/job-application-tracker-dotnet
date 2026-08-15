@@ -3,10 +3,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>JobApplicationTracker.Api</RootNamespace>
     <AssemblyName>JobApplicationTracker.Api</AssemblyName>
+    <UserSecretsId>JobApplicationTracker.Api-4cf9077d-457c-4f7d-860b-ef0786be6e61</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
 </Project>
