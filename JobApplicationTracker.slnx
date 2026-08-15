@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/JobApplicationTracker.Api/JobApplicationTracker.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JobApplicationTracker.UnitTests/JobApplicationTracker.UnitTests.csproj" />
+  </Folder>
 </Solution>

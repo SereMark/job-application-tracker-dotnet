@@ -7,6 +7,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddValidation();
 builder.Services.AddHealthChecks();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 
