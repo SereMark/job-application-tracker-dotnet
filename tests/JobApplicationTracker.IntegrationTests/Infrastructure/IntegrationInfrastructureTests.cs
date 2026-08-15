@@ -31,6 +31,7 @@ public sealed class IntegrationInfrastructureTests(SqlServerContainerFixture sql
             await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken);
 
         Assert.Contains("20260815201610_InitialCreate", appliedMigrations);
+        Assert.Contains("20260815213412_AddApplicationQueryIndexes", appliedMigrations);
         Assert.Equal(factory.DatabaseName, dbContext.Database.GetDbConnection().Database);
     }
 

@@ -76,6 +76,14 @@ internal sealed class JobApplicationConfiguration : IEntityTypeConfiguration<Job
         builder.HasIndex(application => new { application.Status, application.UpdatedAt })
             .IsDescending(false, true);
 
+        builder.HasIndex(application => application.UpdatedAt)
+            .IsDescending();
+
+        builder.HasIndex(application => new { application.Source, application.UpdatedAt })
+            .IsDescending(false, true);
+
+        builder.HasIndex(application => application.AppliedOn);
+
         builder.HasIndex(application => application.NextActionDueAt);
 
         builder.Navigation(application => application.StatusHistory)
