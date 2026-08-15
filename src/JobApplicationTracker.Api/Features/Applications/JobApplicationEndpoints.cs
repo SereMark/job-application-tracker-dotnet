@@ -45,6 +45,15 @@ internal static partial class JobApplicationEndpoints
             .WithSummary("Get a job application")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPut("/{id:guid}", UpdateAsync)
+            .WithName("UpdateJobApplication")
+            .WithSummary("Replace job application details")
+            .WithDescription(
+                "Replaces all editable details and leaves the current status unchanged. "
+                + "Omitted optional fields are cleared.")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return group;
     }
 
@@ -87,10 +96,34 @@ internal static partial class JobApplicationEndpoints
 
         if (application is null)
         {
-            return TypedResults.Problem(
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Job application not found",
-                detail: $"No job application with id '{id}' exists.");
+            return CreateNotFoundProblem(id);
+        }
+
+        return TypedResults.Ok(application.ToResponse());
+    }
+
+    private static async Task<Results<Ok<JobApplicationResponse>, ProblemHttpResult>> UpdateAsync(
+        Guid id,
+        UpdateJobApplicationRequest request,
+        ApplicationDbContext dbContext,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        JobApplication? application = await dbContext.JobApplications
+            .SingleOrDefaultAsync(application => application.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return CreateNotFoundProblem(id);
+        }
+
+        bool wasUpdated = application.UpdateDetails(
+            request.ToDetails(),
+            timeProvider.GetUtcNow());
+
+        if (wasUpdated)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         return TypedResults.Ok(application.ToResponse());
@@ -217,6 +250,12 @@ internal static partial class JobApplicationEndpoints
                 .ThenByDescending(application => application.Id),
             _ => throw new UnreachableException("The sort direction was validated before the handler ran."),
         };
+
+    private static ProblemHttpResult CreateNotFoundProblem(Guid id) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Job application not found",
+            detail: $"No job application with id '{id}' exists.");
 
     [LoggerMessage(
         EventId = 1000,

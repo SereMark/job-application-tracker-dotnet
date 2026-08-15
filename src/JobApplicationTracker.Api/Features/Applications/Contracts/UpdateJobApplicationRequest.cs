@@ -3,15 +3,13 @@ using JobApplicationTracker.Api.Features.Applications.Domain;
 
 namespace JobApplicationTracker.Api.Features.Applications.Contracts;
 
-public sealed record CreateJobApplicationRequest(
+public sealed record UpdateJobApplicationRequest(
     [property: Required]
     [property: MaxLength(JobApplication.CompanyNameMaxLength)]
     string CompanyName,
     [property: Required]
     [property: MaxLength(JobApplication.PositionTitleMaxLength)]
     string PositionTitle,
-    [property: EnumDataType(typeof(ApplicationStatus))]
-    ApplicationStatus Status = ApplicationStatus.Saved,
     Uri? JobPostingUrl = null,
     [property: MaxLength(JobApplication.SourceMaxLength)]
     string? Source = null,

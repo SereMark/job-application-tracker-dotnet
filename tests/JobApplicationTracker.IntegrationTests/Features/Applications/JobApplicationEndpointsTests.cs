@@ -26,7 +26,7 @@ public sealed class JobApplicationEndpointsTests(SqlServerContainerFixture sqlSe
     public async Task CreateThenGetPersistsAndReturnsJobApplication()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        var timeProvider = new FixedTimeProvider(CreatedAt);
+        var timeProvider = new ManualTimeProvider(CreatedAt);
         await using JobApplicationTrackerApiFactory factory =
             await JobApplicationTrackerApiFactory.CreateAsync(
                 sqlServer.ConnectionString,
@@ -114,7 +114,7 @@ public sealed class JobApplicationEndpointsTests(SqlServerContainerFixture sqlSe
     public async Task CreateWithoutStatusDefaultsToSaved()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        var timeProvider = new FixedTimeProvider(CreatedAt);
+        var timeProvider = new ManualTimeProvider(CreatedAt);
         await using JobApplicationTrackerApiFactory factory =
             await JobApplicationTrackerApiFactory.CreateAsync(
                 sqlServer.ConnectionString,
@@ -178,6 +178,7 @@ public sealed class JobApplicationEndpointsTests(SqlServerContainerFixture sqlSe
         new()
         {
             { """{"positionTitle":".NET Developer"}""" },
+            { """{"companyName":"   ","positionTitle":".NET Developer"}""" },
             {
                 """
                 {"companyName":"Example Ltd.","positionTitle":".NET Developer","jobPostingUrl":"/jobs/42"}
@@ -280,10 +281,5 @@ public sealed class JobApplicationEndpointsTests(SqlServerContainerFixture sqlSe
                 allowIntegerValues: false));
 
         return options;
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }
