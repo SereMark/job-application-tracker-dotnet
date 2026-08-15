@@ -1,57 +1,213 @@
 # Job Application Tracker .NET
 
-A REST API for managing job applications, follow-up actions, and application status history.
+[![CI](https://github.com/SereMark/job-application-tracker-dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/SereMark/job-application-tracker-dotnet/actions/workflows/ci.yml)
 
-## Prerequisites
+A local REST API for managing job applications, follow-up actions, and status history.
 
-- .NET 10 SDK
-- Docker Desktop or Docker Engine with Docker Compose
+Built with C# 14, .NET 10, ASP.NET Core Minimal APIs, EF Core, SQL Server 2025,
+OpenAPI, Scalar, Docker Compose, xUnit, Testcontainers, and GitHub Actions.
 
-## Run the complete stack
+## Features
 
-Copy `.env.example` to `.env`, set a strong local-only password, then build and start the API and SQL Server:
+- Create, view, update, and permanently delete job applications.
+- Track `Saved`, `Applied`, `Screening`, `Interview`, `Offer`, `Rejected`, and
+  `Withdrawn` states with a complete status history.
+- Search, filter, sort, and paginate applications.
+- Record an optional next action and see overdue and upcoming work in the pipeline summary.
+- Return consistent validation and error responses using `ProblemDetails`.
+- Persist data in SQL Server with EF Core migrations, constraints, and indexes.
+- Run the API and database together with Docker Compose.
 
-```powershell
-Copy-Item .env.example .env
-# Edit .env and set MSSQL_SA_PASSWORD before continuing.
-docker compose up --build
+## Quick start
+
+The complete stack only requires Docker Desktop or Docker Engine with Docker Compose.
+
+1. Copy `.env.example` to `.env`.
+2. Set `MSSQL_SA_PASSWORD` to a strong password used only for local development.
+3. Build and start the stack:
+
+```bash
+docker compose up --build -d
 ```
 
-The API is available at `http://localhost:8080`, the Scalar API reference at
-`http://localhost:8080/scalar/v1`, and the readiness check at
-`http://localhost:8080/health/ready`. Example requests are in
-`requests/JobApplicationTracker.Api.http`.
+Once the API has started:
 
-Stop the containers without deleting the SQL Server data volume:
+- API: <http://localhost:8080>
+- Scalar API reference: <http://localhost:8080/scalar/v1>
+- Readiness check: <http://localhost:8080/health/ready>
 
-```powershell
+The API container waits for SQL Server to become healthy, then applies any pending
+EF Core migrations before accepting requests.
+
+Stop the containers without deleting the database volume:
+
+```bash
 docker compose down
 ```
 
-## Run the API directly
+## Using the API
 
-Start only SQL Server:
+Scalar provides an interactive view of the complete OpenAPI contract. The
+[HTTP request collection](requests/JobApplicationTracker.Api.http) contains a runnable
+example for every endpoint.
 
-```powershell
+Create an application:
+
+```http
+POST /api/applications
+Content-Type: application/json
+
+{
+  "companyName": "Example Ltd.",
+  "positionTitle": ".NET Developer",
+  "status": "Saved",
+  "jobPostingUrl": "https://example.com/jobs/dotnet-developer",
+  "source": "LinkedIn",
+  "location": "Budapest",
+  "nextActionDescription": "Review the job requirements",
+  "nextActionDueAt": "2026-08-20T10:00:00Z"
+}
+```
+
+Query the application list:
+
+```http
+GET /api/applications?search=.NET&status=Saved&page=1&pageSize=20&sortBy=updatedAt&sortDirection=desc
+```
+
+Change an application's status:
+
+```http
+PATCH /api/applications/{id}/status
+Content-Type: application/json
+
+{
+  "status": "Applied",
+  "note": "Application submitted"
+}
+```
+
+### Endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/api/applications` | Create an application and its initial history entry |
+| `GET` | `/api/applications/{id}` | Get one application |
+| `GET` | `/api/applications` | Search, filter, sort, and paginate applications |
+| `PUT` | `/api/applications/{id}` | Replace editable details without changing status |
+| `PATCH` | `/api/applications/{id}/status` | Change status and append a history entry |
+| `GET` | `/api/applications/{id}/status-history` | Get status history in chronological order |
+| `DELETE` | `/api/applications/{id}` | Delete an application and its status history |
+| `GET` | `/api/applications/summary` | Get pipeline and next-action counts |
+| `GET` | `/health/live` | Check whether the API process is running |
+| `GET` | `/health/ready` | Check whether the API can reach SQL Server |
+
+The list endpoint accepts `search`, `status`, `source`, `appliedFrom`, `appliedTo`,
+`nextActionBefore`, `page`, `pageSize`, `sortBy`, and `sortDirection`. It defaults to
+20 items ordered by `updatedAt desc`; the maximum page size is 100. Sort fields are
+restricted to `updatedAt`, `createdAt`, `companyName`, `positionTitle`, `appliedOn`,
+and `nextActionDueAt`.
+
+## Design
+
+```mermaid
+flowchart LR
+    Client["Scalar or HTTP client"] -->|Request| Pipeline["ASP.NET Core pipeline"]
+    Pipeline --> Validation["Binding and validation"]
+    Validation --> Endpoint["Application endpoint"]
+    Endpoint --> Domain["Domain invariants"]
+    Endpoint --> DbContext["EF Core DbContext"]
+    DbContext --> Database[(SQL Server)]
+    Database --> DbContext
+    Endpoint -->|Typed result or ProblemDetails| Client
+```
+
+The application is a feature-based modular monolith with one production project and
+separate unit and integration test projects. This keeps the codebase small while retaining
+clear boundaries between HTTP contracts, domain behavior, and persistence configuration.
+
+Key decisions:
+
+- Minimal APIs keep the HTTP layer compact and expose typed OpenAPI metadata.
+- Endpoints use `ApplicationDbContext` directly. EF Core already provides repository and
+  unit-of-work behavior, so a generic repository would only duplicate its API here.
+- Domain methods normalize input and protect lifecycle rules independently of HTTP binding.
+- UUID v7 identifiers are unique while remaining broadly time-orderable.
+- `TimeProvider` makes timestamps and deadline calculations deterministic in tests.
+- Read queries use no-tracking projections; sorting is restricted to an explicit allowlist.
+- Status changes update the current state and append history in one database transaction.
+
+`JobApplication` owns its current details and has a one-to-many relationship with
+`StatusChange`. Status values are stored as readable strings. Database constraints protect
+valid statuses and require the next-action description and deadline to be either both present
+or both absent. Deleting an application cascades to its history.
+
+## Local development
+
+Running the API directly requires the .NET 10 SDK in addition to Docker.
+
+Start SQL Server only:
+
+```bash
 docker compose up -d --wait sqlserver
 ```
 
-Store the API connection string with the same password outside the repository:
+Store the connection string outside the repository. In PowerShell:
 
 ```powershell
 dotnet user-secrets set --project src/JobApplicationTracker.Api `
   "ConnectionStrings:Database" `
-  "Server=127.0.0.1,1433;Database=JobApplicationTracker;User ID=sa;Password=<same-password>;Encrypt=True;TrustServerCertificate=True"
+  "Server=127.0.0.1,1433;Database=JobApplicationTracker;User ID=sa;Password=<same-password-as-.env>;Encrypt=True;TrustServerCertificate=True"
+```
+
+Apply migrations and run the API:
+
+```bash
 dotnet tool restore
-$env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet ef database update --project src/JobApplicationTracker.Api
 dotnet run --project src/JobApplicationTracker.Api
 ```
 
-## Test
+The development profile listens on <http://localhost:5090>; Scalar is available at
+<http://localhost:5090/scalar/v1>. Automatic migration is disabled by default and enabled
+explicitly by Compose through `Database__MigrateOnStartup=true`.
 
-Docker must be running because the integration tests start an isolated, temporary SQL Server container. The test container and its databases are removed automatically after the test run.
+## Testing and CI
 
-```powershell
+Run all tests from the repository root:
+
+```bash
 dotnet test
 ```
+
+Unit tests cover domain invariants. Integration tests start a temporary SQL Server 2025
+container, apply real migrations, host the complete API with `WebApplicationFactory`, and
+give each test application factory an isolated database. The EF InMemory provider is not used.
+
+The [CI workflow](.github/workflows/ci.yml) runs on pushes to `main` and on pull requests. It
+checks formatting and analyzer rules, performs a warning-free Release build, runs unit and
+SQL Server integration tests with coverage, uploads the test artifacts, and builds the Docker
+image. It performs continuous integration only; it does not deploy the application.
+
+## Data and security notes
+
+The `sqlserver-data` volume survives `docker compose down` and container recreation.
+Running `docker compose down --volumes` permanently removes that local database. A Docker
+volume is not a backup; use SQL Server backup tooling before deleting the volume if the data
+matters to you.
+
+The Compose stack is intended for local, single-user development:
+
+- Published ports bind only to `127.0.0.1`.
+- `.env` is excluded from Git; direct-run connection strings are stored with .NET user secrets.
+- The local database connection uses the SQL Server administrator account, encrypts traffic,
+  and trusts the SQL Server container's certificate.
+- The API does not include authentication, user isolation, TLS termination, or production
+  secret management and should not be exposed to an untrusted network.
+
+## Possible extensions
+
+Natural next steps are a small web UI, authentication and per-user data isolation,
+export or reminder workflows, and finally cloud hosting with a separate deployment pipeline.
+Additional architectural layers or services should be introduced only when those features
+create a concrete need for them.
