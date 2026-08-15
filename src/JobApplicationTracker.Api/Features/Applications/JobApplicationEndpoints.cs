@@ -54,6 +54,23 @@ internal static partial class JobApplicationEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPatch("/{id:guid}/status", ChangeStatusAsync)
+            .WithName("ChangeJobApplicationStatus")
+            .WithSummary("Change a job application status")
+            .WithDescription(
+                "Changes the current status and records the transition in status history. "
+                + "Changing to the current status returns a conflict response.")
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/{id:guid}/status-history", GetStatusHistoryAsync)
+            .WithName("GetJobApplicationStatusHistory")
+            .WithSummary("Get job application status history")
+            .WithDescription(
+                "Returns the initial status and every later transition in chronological order.")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return group;
     }
 
@@ -127,6 +144,68 @@ internal static partial class JobApplicationEndpoints
         }
 
         return TypedResults.Ok(application.ToResponse());
+    }
+
+    private static async Task<Results<Ok<JobApplicationResponse>, ProblemHttpResult>> ChangeStatusAsync(
+        Guid id,
+        ChangeJobApplicationStatusRequest request,
+        ApplicationDbContext dbContext,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        JobApplication? application = await dbContext.JobApplications
+            .SingleOrDefaultAsync(application => application.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return CreateNotFoundProblem(id);
+        }
+
+        ApplicationStatus newStatus = request.Status
+            ?? throw new UnreachableException("Status is validated before the handler runs.");
+
+        bool wasChanged = application.ChangeStatus(
+            newStatus,
+            request.Note,
+            timeProvider.GetUtcNow());
+
+        if (!wasChanged)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Job application status conflict",
+                detail: $"Job application '{id}' already has status '{newStatus}'.");
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return TypedResults.Ok(application.ToResponse());
+    }
+
+    private static async Task<Results<Ok<List<StatusChangeResponse>>, ProblemHttpResult>>
+        GetStatusHistoryAsync(
+            Guid id,
+            ApplicationDbContext dbContext,
+            CancellationToken cancellationToken)
+    {
+        bool applicationExists = await dbContext.JobApplications
+            .AsNoTracking()
+            .AnyAsync(application => application.Id == id, cancellationToken);
+
+        if (!applicationExists)
+        {
+            return CreateNotFoundProblem(id);
+        }
+
+        List<StatusChangeResponse> history = await dbContext.StatusChanges
+            .AsNoTracking()
+            .Where(change => change.JobApplicationId == id)
+            .OrderBy(change => change.ChangedAt)
+            .ThenBy(change => change.Id)
+            .Select(JobApplicationMappings.StatusHistoryProjection)
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok(history);
     }
 
     private static async Task<Ok<PagedJobApplicationsResponse>> GetAllAsync(

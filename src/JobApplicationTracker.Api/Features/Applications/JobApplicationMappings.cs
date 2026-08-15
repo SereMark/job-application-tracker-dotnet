@@ -22,6 +22,14 @@ internal static class JobApplicationMappings
             application.CreatedAt,
             application.UpdatedAt);
 
+    public static Expression<Func<StatusChange, StatusChangeResponse>> StatusHistoryProjection { get; } =
+        change => new StatusChangeResponse(
+            change.Id,
+            change.PreviousStatus,
+            change.NewStatus,
+            change.ChangedAt,
+            change.Note);
+
     public static JobApplicationDetails ToDetails(this CreateJobApplicationRequest request) =>
         new(
             request.CompanyName,
