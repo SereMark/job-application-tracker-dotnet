@@ -41,3 +41,11 @@ dotnet restore
 dotnet build
 dotnet run --project src/JobApplicationTracker.Api
 ```
+
+## Test
+
+Docker must be running because the integration tests start an isolated, temporary SQL Server container. The test container and its databases are removed automatically after the test run.
+
+```powershell
+dotnet test
+```

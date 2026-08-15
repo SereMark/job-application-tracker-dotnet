@@ -5,15 +5,18 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-string databaseConnectionString = builder.Configuration.GetConnectionString("Database")
-    ?? throw new InvalidOperationException("Connection string 'Database' is not configured.");
-
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddValidation();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(databaseConnectionString));
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
+{
+    IConfiguration configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    string databaseConnectionString = configuration.GetConnectionString("Database")
+        ?? throw new InvalidOperationException("Connection string 'Database' is not configured.");
+
+    options.UseSqlServer(databaseConnectionString);
+});
 builder.Services
     .AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(
