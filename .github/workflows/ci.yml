@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "true"
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  verify:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore JobApplicationTracker.slnx
+
+      - name: Verify formatting
+        run: dotnet format JobApplicationTracker.slnx --verify-no-changes --no-restore
+
+      - name: Verify analyzer rules
+        run: >-
+          dotnet format analyzers JobApplicationTracker.slnx
+          --verify-no-changes
+          --severity info
+          --no-restore
+
+      - name: Build
+        run: >-
+          dotnet build JobApplicationTracker.slnx
+          --configuration Release
+          --no-restore
+
+      - name: Run unit tests with coverage
+        run: >-
+          dotnet test tests/JobApplicationTracker.UnitTests/JobApplicationTracker.UnitTests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=unit-tests.trx"
+          --results-directory artifacts/test-results/unit
+
+      - name: Run SQL Server integration tests with coverage
+        run: >-
+          dotnet test tests/JobApplicationTracker.IntegrationTests/JobApplicationTracker.IntegrationTests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=integration-tests.trx"
+          --results-directory artifacts/test-results/integration
+
+      - name: Upload test results and coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-and-coverage
+          path: artifacts/test-results
+          if-no-files-found: error
+          retention-days: 14
+
+  container:
+    name: Build container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Check Dockerfile
+        run: docker build --check .
+
+      - name: Build container image
+        run: docker build --tag job-application-tracker:${{ github.sha }} .
