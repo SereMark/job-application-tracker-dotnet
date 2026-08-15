@@ -1,0 +1,76 @@
+@host = http://localhost:8080
+
+### Liveness
+GET {{host}}/health/live
+Accept: application/json
+
+### Readiness, including the database
+GET {{host}}/health/ready
+Accept: application/json
+
+### Pipeline summary
+GET {{host}}/api/applications/summary
+Accept: application/json
+
+### Create an application
+# @name createApplication
+POST {{host}}/api/applications
+Content-Type: application/json
+Accept: application/json
+
+{
+  "companyName": "Example Ltd.",
+  "positionTitle": ".NET Developer",
+  "status": "Saved",
+  "jobPostingUrl": "https://example.com/jobs/dotnet-developer",
+  "source": "LinkedIn",
+  "location": "Budapest",
+  "notes": "Portfolio API example",
+  "nextActionDescription": "Review the job requirements",
+  "nextActionDueAt": "2026-08-20T10:00:00Z"
+}
+
+### Use the id returned by the named create request
+@applicationId = {{createApplication.response.body.$.id}}
+
+### Get the created application
+GET {{host}}/api/applications/{{applicationId}}
+Accept: application/json
+
+### Query applications
+GET {{host}}/api/applications?search=.NET&status=Saved&page=1&pageSize=20&sortBy=updatedAt&sortDirection=desc
+Accept: application/json
+
+### Replace editable application details
+PUT {{host}}/api/applications/{{applicationId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "companyName": "Example Ltd.",
+  "positionTitle": "Backend .NET Developer",
+  "jobPostingUrl": "https://example.com/jobs/dotnet-developer",
+  "source": "LinkedIn",
+  "location": "Budapest",
+  "appliedOn": "2026-08-16",
+  "notes": "Application prepared",
+  "nextActionDescription": "Follow up with the recruiter",
+  "nextActionDueAt": "2026-08-23T10:00:00Z"
+}
+
+### Change status
+PATCH {{host}}/api/applications/{{applicationId}}/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "status": "Applied",
+  "note": "Application submitted"
+}
+
+### Get status history
+GET {{host}}/api/applications/{{applicationId}}/status-history
+Accept: application/json
+
+### Delete the application
+DELETE {{host}}/api/applications/{{applicationId}}

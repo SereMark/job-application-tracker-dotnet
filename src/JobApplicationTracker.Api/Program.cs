@@ -35,6 +35,15 @@ builder.Services
 
 var app = builder.Build();
 
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
+    ApplicationDbContext dbContext =
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    await dbContext.Database.MigrateAsync();
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 

@@ -1,4 +1,22 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Database: >-
+        Server=sqlserver,1433;Database=JobApplicationTracker;User ID=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in the .env file};Encrypt=True;TrustServerCertificate=True
+      Database__MigrateOnStartup: "true"
+    ports:
+      - target: 8080
+        published: "${API_PORT:-8080}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2025-latest
     environment:
