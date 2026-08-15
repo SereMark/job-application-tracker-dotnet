@@ -71,6 +71,13 @@ internal static partial class JobApplicationEndpoints
                 "Returns the initial status and every later transition in chronological order.")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .WithName("DeleteJobApplication")
+            .WithSummary("Delete a job application")
+            .WithDescription(
+                "Permanently deletes a job application and its complete status history.")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return group;
     }
 
@@ -206,6 +213,25 @@ internal static partial class JobApplicationEndpoints
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(history);
+    }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
+        Guid id,
+        ApplicationDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        JobApplication? application = await dbContext.JobApplications
+            .SingleOrDefaultAsync(application => application.Id == id, cancellationToken);
+
+        if (application is null)
+        {
+            return CreateNotFoundProblem(id);
+        }
+
+        dbContext.JobApplications.Remove(application);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return TypedResults.NoContent();
     }
 
     private static async Task<Ok<PagedJobApplicationsResponse>> GetAllAsync(
