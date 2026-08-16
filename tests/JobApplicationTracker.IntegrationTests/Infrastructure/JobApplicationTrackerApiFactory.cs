@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace JobApplicationTracker.IntegrationTests.Infrastructure;
 
@@ -61,7 +62,7 @@ public sealed class JobApplicationTrackerApiFactory : WebApplicationFactory<Prog
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("IntegrationTests");
+        builder.UseEnvironment(Environments.Development);
         builder.ConfigureAppConfiguration(configuration =>
         {
             Dictionary<string, string?> testSettings = new()
