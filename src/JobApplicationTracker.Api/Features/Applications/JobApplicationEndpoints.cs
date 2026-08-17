@@ -11,6 +11,9 @@ namespace JobApplicationTracker.Api.Features.Applications;
 
 internal static partial class JobApplicationEndpoints
 {
+    private const string DocxContentType =
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    private const string PdfContentType = "application/pdf";
     private const int SummaryWindowDays = 7;
     private const string GetByIdRouteName = "GetJobApplicationById";
     private const string LoggerCategory =
@@ -53,6 +56,24 @@ internal static partial class JobApplicationEndpoints
             .WithSummary("Get a job application")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPut("/{id:guid}/resume", UploadResumeAsync)
+            .WithName("UploadApplicationResume")
+            .WithSummary("Upload or replace an application resume")
+            .WithDescription(
+                "Stores one PDF or DOCX resume of at most 5 MB for the job application. "
+                + "Uploading again replaces the previous file.")
+            .Produces<ApplicationResumeResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .DisableAntiforgery();
+
+        group.MapGet("/{id:guid}/resume", DownloadResumeAsync)
+            .WithName("DownloadApplicationResume")
+            .WithSummary("Download an application resume")
+            .WithDescription(
+                "Downloads the resume stored for the job application using its original file name.")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         group.MapPut("/{id:guid}", UpdateAsync)
             .WithName("UpdateJobApplication")
             .WithSummary("Replace job application details")
@@ -83,7 +104,7 @@ internal static partial class JobApplicationEndpoints
             .WithName("DeleteJobApplication")
             .WithSummary("Delete a job application")
             .WithDescription(
-                "Permanently deletes a job application and its complete status history.")
+                "Permanently deletes a job application, its status history, and its resume.")
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         return group;
@@ -132,6 +153,88 @@ internal static partial class JobApplicationEndpoints
         }
 
         return TypedResults.Ok(application.ToResponse());
+    }
+
+    private static async Task<
+        Results<Ok<ApplicationResumeResponse>, ValidationProblem, ProblemHttpResult>>
+        UploadResumeAsync(
+            Guid id,
+            IFormFile file,
+            ApplicationDbContext dbContext,
+            TimeProvider timeProvider,
+            CancellationToken cancellationToken)
+    {
+        bool applicationExists = await dbContext.JobApplications
+            .AsNoTracking()
+            .AnyAsync(application => application.Id == id, cancellationToken);
+
+        if (!applicationExists)
+        {
+            return CreateNotFoundProblem(id);
+        }
+
+        ResumeFileValidation validation = ValidateResumeFile(file);
+
+        if (validation.Error is not null)
+        {
+            return CreateResumeValidationProblem(validation.Error);
+        }
+
+        using var contentStream = new MemoryStream((int)file.Length);
+        await file.CopyToAsync(contentStream, cancellationToken);
+        byte[] content = contentStream.ToArray();
+
+        ApplicationResume? resume = await dbContext.ApplicationResumes
+            .SingleOrDefaultAsync(
+                resume => resume.JobApplicationId == id,
+                cancellationToken);
+
+        if (resume is null)
+        {
+            resume = ApplicationResume.Create(
+                id,
+                validation.FileName,
+                validation.ContentType,
+                content,
+                timeProvider.GetUtcNow());
+            dbContext.ApplicationResumes.Add(resume);
+        }
+        else
+        {
+            resume.Replace(
+                validation.FileName,
+                validation.ContentType,
+                content,
+                timeProvider.GetUtcNow());
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return TypedResults.Ok(resume.ToResponse());
+    }
+
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>>
+        DownloadResumeAsync(
+            Guid id,
+            ApplicationDbContext dbContext,
+            CancellationToken cancellationToken)
+    {
+        ApplicationResume? resume = await dbContext.ApplicationResumes
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                resume => resume.JobApplicationId == id,
+                cancellationToken);
+
+        if (resume is null)
+        {
+            return CreateResumeNotFoundProblem(id);
+        }
+
+        return TypedResults.File(
+            resume.Content,
+            resume.ContentType,
+            resume.FileName,
+            lastModified: resume.UploadedAt);
     }
 
     private static async Task<Results<Ok<JobApplicationResponse>, ProblemHttpResult>> UpdateAsync(
@@ -411,6 +514,68 @@ internal static partial class JobApplicationEndpoints
             statusCode: StatusCodes.Status404NotFound,
             title: "Job application not found",
             detail: $"No job application with id '{id}' exists.");
+
+    private static ProblemHttpResult CreateResumeNotFoundProblem(Guid id) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Application resume not found",
+            detail: $"Job application '{id}' does not have a stored resume.");
+
+    private static ValidationProblem CreateResumeValidationProblem(string error) =>
+        TypedResults.ValidationProblem(
+            new Dictionary<string, string[]>
+            {
+                ["file"] = [error],
+            });
+
+    private static ResumeFileValidation ValidateResumeFile(IFormFile file)
+    {
+        if (file.Length == 0)
+        {
+            return ResumeFileValidation.Invalid("The resume file cannot be empty.");
+        }
+
+        if (file.Length > ApplicationResume.MaxFileSize)
+        {
+            return ResumeFileValidation.Invalid("The resume file cannot exceed 5 MB.");
+        }
+
+        string fileName = Path.GetFileName(file.FileName.Replace('\\', '/')).Trim();
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return ResumeFileValidation.Invalid("The resume file name is required.");
+        }
+
+        if (fileName.Length > ApplicationResume.FileNameMaxLength)
+        {
+            return ResumeFileValidation.Invalid(
+                $"The resume file name cannot exceed {ApplicationResume.FileNameMaxLength} characters.");
+        }
+
+        string? contentType = Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".pdf" => PdfContentType,
+            ".docx" => DocxContentType,
+            _ => null,
+        };
+
+        return contentType is null
+            ? ResumeFileValidation.Invalid("Only PDF and DOCX resume files are supported.")
+            : ResumeFileValidation.Valid(fileName, contentType);
+    }
+
+    private sealed record ResumeFileValidation(
+        string FileName,
+        string ContentType,
+        string? Error)
+    {
+        public static ResumeFileValidation Invalid(string error) =>
+            new(string.Empty, string.Empty, error);
+
+        public static ResumeFileValidation Valid(string fileName, string contentType) =>
+            new(fileName, contentType, Error: null);
+    }
 
     [LoggerMessage(
         EventId = 1000,

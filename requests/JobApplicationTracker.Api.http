@@ -37,6 +37,23 @@ Accept: application/json
 GET {{host}}/api/applications/{{applicationId}}
 Accept: application/json
 
+### Upload or replace the resume (set this to an existing PDF or DOCX first)
+@resumePath = C:/path/to/resume.pdf
+PUT {{host}}/api/applications/{{applicationId}}/resume
+Content-Type: multipart/form-data; boundary=ResumeBoundary
+Accept: application/json
+
+--ResumeBoundary
+Content-Disposition: form-data; name="file"; filename="resume.pdf"
+Content-Type: application/pdf
+
+< {{resumePath}}
+--ResumeBoundary--
+
+### Download the stored resume
+GET {{host}}/api/applications/{{applicationId}}/resume
+Accept: application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
 ### Query applications
 GET {{host}}/api/applications?search=.NET&status=Saved&page=1&pageSize=20&sortBy=updatedAt&sortDirection=desc
 Accept: application/json

@@ -3,6 +3,7 @@ using JobApplicationTracker.Api.Features.Applications;
 using JobApplicationTracker.Api.Features.Applications.Domain;
 using JobApplicationTracker.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -16,6 +17,10 @@ builder.Services.Configure<RouteHandlerOptions>(static options =>
     options.ThrowOnBadRequest = false;
 });
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = ApplicationResume.MaxFileSize + (64 * 1_024);
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(

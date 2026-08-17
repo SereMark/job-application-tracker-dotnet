@@ -69,4 +69,11 @@ internal static class JobApplicationMappings
             application.NextActionDueAt,
             application.CreatedAt,
             application.UpdatedAt);
+
+    public static ApplicationResumeResponse ToResponse(this ApplicationResume resume) =>
+        new(
+            resume.FileName,
+            resume.ContentType,
+            resume.Content.Length,
+            resume.UploadedAt);
 }

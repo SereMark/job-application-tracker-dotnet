@@ -9,6 +9,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 {
     public DbSet<JobApplication> JobApplications => Set<JobApplication>();
 
+    public DbSet<ApplicationResume> ApplicationResumes => Set<ApplicationResume>();
+
     public DbSet<StatusChange> StatusChanges => Set<StatusChange>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -16,6 +18,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfiguration(new JobApplicationConfiguration());
+        modelBuilder.ApplyConfiguration(new ApplicationResumeConfiguration());
         modelBuilder.ApplyConfiguration(new StatusChangeConfiguration());
     }
 }
